@@ -10,14 +10,12 @@ const { ObjectId } = mongodb;
 
 class FilesController {
   static async postUpload(req, res) {
+    // Authenticate user
     const token = req.header('X-Token');
-
     const userId = await redisClient.get(`auth_${token}`);
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-      });
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const user = await dbClient.db.collection('users').findOne({
@@ -25,11 +23,10 @@ class FilesController {
     });
 
     if (!user) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-      });
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    // Retrieve request body
     const {
       name,
       type,
@@ -38,23 +35,29 @@ class FilesController {
       data,
     } = req.body;
 
+    // Validate name
     if (!name) {
       return res.status(400).json({
         error: 'Missing name',
       });
     }
 
+    // Validate type
     if (!type || !['folder', 'file', 'image'].includes(type)) {
       return res.status(400).json({
         error: 'Missing type',
       });
     }
 
+    // Validate data
     if (type !== 'folder' && !data) {
       return res.status(400).json({
         error: 'Missing data',
       });
     }
+
+    // Validate parent
+    let storedParentId = '0';
 
     if (parentId !== '0') {
       const parent = await dbClient.db.collection('files').findOne({
@@ -72,15 +75,18 @@ class FilesController {
           error: 'Parent is not a folder',
         });
       }
+
+      storedParentId = new ObjectId(parentId);
     }
 
+    // Folder creation
     if (type === 'folder') {
       const result = await dbClient.db.collection('files').insertOne({
-        userId: new ObjectId(userId),
+        userId,
         name,
         type,
         isPublic,
-        parentId,
+        parentId: storedParentId,
       });
 
       return res.status(201).json({
@@ -93,6 +99,7 @@ class FilesController {
       });
     }
 
+    // File/Image creation
     const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
 
     if (!fs.existsSync(folderPath)) {
@@ -105,11 +112,11 @@ class FilesController {
     fs.writeFileSync(localPath, Buffer.from(data, 'base64'));
 
     const result = await dbClient.db.collection('files').insertOne({
-      userId: new ObjectId(userId),
+      userId,
       name,
       type,
       isPublic,
-      parentId,
+      parentId: storedParentId,
       localPath,
     });
 
