@@ -4,7 +4,6 @@ import UsersController from '../controllers/UsersController';
 import AuthController from '../controllers/AuthController';
 import FilesController from '../controllers/FilesController';
 
-
 const router = express.Router();
 
 router.get('/status', AppController.getStatus);

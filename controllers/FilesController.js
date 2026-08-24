@@ -51,11 +51,11 @@ class FilesController {
       }
 
       const doc = {
-        userId: user._id,          // ObjectId, not the Redis string
+        userId: user._id, // ObjectId, not the Redis string
         name,
         type,
         isPublic,
-        parentId: storedParentId,  // 0 at root, ObjectId otherwise
+        parentId: storedParentId, // 0 at root, ObjectId otherwise
       };
 
       // what goes back to the client: id not _id, no localPath, parentId as 0 at root
