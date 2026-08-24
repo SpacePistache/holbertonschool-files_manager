@@ -156,6 +156,38 @@ class FilesController {
       return res.status(500).json({ error: 'Internal error' });
     }
   }
+
+    static async setPublish(req, res, isPublic) {
+    try {
+      const user = await getUserFromToken(req);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      const { id } = req.params;
+      if (!ObjectId.isValid(id)) return res.status(404).json({ error: 'Not found' });
+
+      // findOneAndUpdate does the match and the write in one round trip
+      const result = await dbClient.db.collection('files').findOneAndUpdate(
+        { _id: new ObjectId(id), userId: user._id },
+        { $set: { isPublic } },
+        { returnOriginal: false }, // driver v3 option: give me the doc AFTER the update
+      );
+
+      if (!result.value) return res.status(404).json({ error: 'Not found' });
+
+      return res.status(200).json(formatFile(result.value));
+    } catch (err) {
+      console.error('setPublish failed:', err);
+      return res.status(500).json({ error: 'Internal error' });
+    }
+  }
+
+  static async putPublish(req, res) {
+    return FilesController.setPublish(req, res, true);
+  }
+
+  static async putUnpublish(req, res) {
+    return FilesController.setPublish(req, res, false);
+  }
 }
 
 export default FilesController;
