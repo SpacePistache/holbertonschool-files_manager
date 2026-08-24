@@ -14,7 +14,9 @@ class AuthController {
     const decoded = Buffer.from(auth.split(' ')[1], 'base64')
       .toString();
 
-    const [email, password] = decoded.split(':');
+    const sep = decoded.indexOf(':');
+    const email = decoded.slice(0, sep);
+    const password = decoded.slice(sep + 1);
 
     const user = await dbClient.db.collection('users').findOne({
       email,
