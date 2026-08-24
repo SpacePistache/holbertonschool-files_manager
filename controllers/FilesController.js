@@ -157,7 +157,7 @@ class FilesController {
     }
   }
 
-    static async setPublish(req, res, isPublic) {
+  static async setPublish(req, res, isPublic) {
     try {
       const user = await getUserFromToken(req);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
