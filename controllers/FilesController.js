@@ -2,12 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import mongodb from 'mongodb';
-
 import mime from 'mime-types';
+import Bull from 'bull';
+
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
 const { ObjectId } = mongodb;
+
+const fileQueue = new Bull('fileQueue');
 
 const formatFile = (doc) => ({
   id: doc._id.toString(),
@@ -100,6 +103,14 @@ class FilesController {
       doc.localPath = localPath;
 
       const result = await dbClient.db.collection('files').insertOne(doc);
+
+      if (type === 'image') {
+        await fileQueue.add({
+          userId: user._id.toString(),
+          fileId: result.insertedId.toString(),
+        });
+      }
+
       return respond(result.insertedId);
     } catch (err) {
       console.error('postUpload failed:', err);
@@ -166,11 +177,10 @@ class FilesController {
       const { id } = req.params;
       if (!ObjectId.isValid(id)) return res.status(404).json({ error: 'Not found' });
 
-      // findOneAndUpdate does the match and the write in one round trip
       const result = await dbClient.db.collection('files').findOneAndUpdate(
         { _id: new ObjectId(id), userId: user._id },
         { $set: { isPublic } },
-        { returnOriginal: false }, // driver v3 option: give me the doc AFTER the update
+        { returnOriginal: false },
       );
 
       if (!result.value) return res.status(404).json({ error: 'Not found' });
@@ -195,11 +205,9 @@ class FilesController {
       const { id } = req.params;
       if (!ObjectId.isValid(id)) return res.status(404).json({ error: 'Not found' });
 
-      // look up by id ALONE — ownership is checked after, not in the query
       const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(id) });
       if (!file) return res.status(404).json({ error: 'Not found' });
 
-      // may be null: no token is allowed, it just means "not the owner"
       const user = await getUserFromToken(req);
       const isOwner = user && file.userId.toString() === user._id.toString();
 
@@ -209,14 +217,21 @@ class FilesController {
         return res.status(400).json({ error: "A folder doesn't have content" });
       }
 
-      if (!file.localPath || !fs.existsSync(file.localPath)) {
+      const { size } = req.query;
+      let filePath = file.localPath;
+
+      if (size && ['500', '250', '100'].includes(size)) {
+        filePath = `${file.localPath}_${size}`;
+      }
+
+      if (!filePath || !fs.existsSync(filePath)) {
         return res.status(404).json({ error: 'Not found' });
       }
 
       const mimeType = mime.lookup(file.name) || 'text/plain';
       res.setHeader('Content-Type', mimeType);
 
-      return res.status(200).send(fs.readFileSync(file.localPath));
+      return res.status(200).send(fs.readFileSync(filePath));
     } catch (err) {
       console.error('getFile failed:', err);
       return res.status(500).json({ error: 'Internal error' });
